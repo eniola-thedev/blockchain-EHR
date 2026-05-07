@@ -1,0 +1,14 @@
+node_modules/
+.env
+*.env.local
+build/
+dist/
+.cache/
+blockchain/cache/
+blockchain/artifacts/
+blockchain/deployed-addresses.json
+backend/blockchain/abis/
+.DS_Store
+*.log
+coverage/
+typechain-types/

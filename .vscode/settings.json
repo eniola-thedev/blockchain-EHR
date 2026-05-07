@@ -1,0 +1,8 @@
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^cd c:\\\\Users\\\\USER\\\\Downloads\\\\ehr\\\\ehr-blockchain\\\\backend ; node tests/simple-test\\.js 2>&1$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
+}
