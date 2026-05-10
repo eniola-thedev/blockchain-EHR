@@ -1,4 +1,16 @@
 {
+  "name": "medchain",
+  "version": "1.0.0",
+  "description": "MedChain EHR Blockchain - Monorepo",
+  "private": true,
+  "scripts": {
+    "install-backend": "cd ehr-blockchain/backend && npm install",
+    "start": "cd ehr-blockchain/backend && npm start",
+    "dev": "cd ehr-blockchain/backend && npm run dev"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "mongodb": "^7.2.0"
   }
