@@ -69,8 +69,12 @@ exports.requestMedicalRecords = async (req, res) => {
     }
 
     // Check if patient is allowed at target hospital.
-    // NOTE: User model only stores a single home hospital (patient.hospitalId),
-    // so registration across hospitals is represented via AccessRequest.
+    // Patient can access records at target hospital if:
+    // 1. Patient is registered at the target hospital (registeredHospitals includes targetHospitalId), OR
+    // 2. There's an approved AccessRequest between requesting and target hospitals
+    const isRegisteredAtTarget = patient.registeredHospitals &&
+      patient.registeredHospitals.some(h => h.toString() === targetHospitalId.toString());
+
     const approvedAccess = await AccessRequest.findOne({
       patientId,
       requestingHospital: requestingHospitalId,
@@ -79,11 +83,12 @@ exports.requestMedicalRecords = async (req, res) => {
       $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
     });
 
-    if (!approvedAccess) {
+    if (!isRegisteredAtTarget && !approvedAccess) {
       return res.status(403).json({
         error: "Patient is not registered at target hospital",
         patientHospital: patient.hospitalId?.toString?.() ?? patient.hospitalId,
         targetHospital: targetHospitalId,
+        registeredHospitals: patient.registeredHospitals?.length || 0,
       });
     }
 

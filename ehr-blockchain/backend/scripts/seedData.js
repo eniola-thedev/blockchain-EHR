@@ -621,7 +621,8 @@ async function seedDatabase() {
           password: "Patient@1234",
           role: "patient",
           patientId: patient.id,
-          hospitalId: hospitals[0]._id,
+          hospitalId: hospitals[0]._id, // Primary hospital
+          registeredHospitals: hospitals.map(h => h._id), // Registered at ALL hospitals
           firstName: patient.name.split(" ")[0],
           lastName: patient.name.split(" ")[1],
           dateOfBirth: new Date(patient.dob),
@@ -630,6 +631,10 @@ async function seedDatabase() {
           phone: `+234-${Math.random().toString().slice(2, 12)}`,
           isActive: true,
         });
+      } else {
+        // Update existing patient to be registered at all hospitals
+        patientUser.registeredHospitals = hospitals.map(h => h._id);
+        await patientUser.save();
       }
 
       const recordsPerPatient = 8 + Math.floor(Math.random() * 3);
@@ -708,6 +713,7 @@ async function seedDatabase() {
         role: "patient",
         patientId: "PAT-DEMO-001",
         hospitalId: hospitals[0]._id,
+        registeredHospitals: hospitals.map(h => h._id), // Registered at ALL hospitals
         firstName: "Demo",
         lastName: "Patient",
         dateOfBirth: new Date("1990-01-01"),
@@ -767,6 +773,10 @@ async function seedDatabase() {
           createdAt: new Date(Date.now() - (15 - i) * 3 * 24 * 60 * 60 * 1000),
         });
       }
+    } else {
+      // Update existing demo patient to be registered at all hospitals
+      demoPatient.registeredHospitals = hospitals.map(h => h._id);
+      await demoPatient.save();
     }
 
     console.log("\n✅ Seed completed successfully!");

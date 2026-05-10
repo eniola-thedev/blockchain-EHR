@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema({
 
   // Hospital fields
   hospitalId:   { type: mongoose.Schema.Types.ObjectId, ref: "Hospital" },
+  registeredHospitals: [{ type: mongoose.Schema.Types.ObjectId, ref: "Hospital" }], // Hospitals where patient is registered
   walletAddress: { type: String }, // Ethereum address for blockchain interactions
 
   // Doctor fields

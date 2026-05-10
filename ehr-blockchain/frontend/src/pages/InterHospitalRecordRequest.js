@@ -4,7 +4,7 @@
  * and OUTGOING (requests FROM this hospital)
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { useNavigate } from "react-router-dom";
@@ -23,37 +23,13 @@ const InterHospitalRecordRequest = () => {
     duration: 72,
   });
   const [hospitals, setHospitals] = useState([]);
-  const [patients, setPatients] = useState([]);
-  const [patientSearch, setPatientSearch] = useState("");
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const formPatientId = selectedPatient?.patientId || formData.patientId;
-
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [patientsLoading, setPatientsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [filters, setFilters] = useState({ status: "all", page: 1 });
   const [showViewRecordsModal, setShowViewRecordsModal] = useState(false);
   const [recordsModalData, setRecordsModalData] = useState(null);
-
-  const searchDebounceRef = useRef(null);
-  const searchWrapperRef = useRef(null);
-
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (
-        searchWrapperRef.current &&
-        !searchWrapperRef.current.contains(e.target)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   // Fetch verified hospitals
   useEffect(() => {
@@ -67,52 +43,6 @@ const InterHospitalRecordRequest = () => {
     };
     fetchHospitals();
   }, []);
-
-  // Debounced patient search
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-
-    searchDebounceRef.current = setTimeout(async () => {
-      if (
-        patientSearch.trim().length === 0 ||
-        patientSearch.trim().length >= 2
-      ) {
-        try {
-          setPatientsLoading(true);
-          const response = await api.get("/inter-hospital/patients", {
-            params: { query: patientSearch.trim(), limit: 50 },
-          });
-          setPatients(response.data.patients || []);
-          setShowSuggestions(true);
-        } catch (error) {
-          console.error("Failed to fetch patients:", error);
-          setPatients([]);
-        } finally {
-          setPatientsLoading(false);
-        }
-      }
-    }, 300);
-
-    return () => clearTimeout(searchDebounceRef.current);
-  }, [patientSearch]);
-
-  const handlePatientSelect = (patient) => {
-    setSelectedPatient(patient);
-    setFormData((prev) => ({ ...prev, patientId: patient.patientId }));
-    setPatientSearch(
-      patient.name ||
-        `${patient.firstName || ""} ${patient.lastName || ""}`.trim(),
-    );
-    setShowSuggestions(false);
-  };
-
-  const handlePatientSearchChange = (e) => {
-    setPatientSearch(e.target.value);
-    if (selectedPatient) {
-      setSelectedPatient(null);
-      setFormData((prev) => ({ ...prev, patientId: "" }));
-    }
-  };
 
   // Fetch incoming requests
   const fetchIncomingRequests = async () => {
@@ -149,23 +79,10 @@ const InterHospitalRecordRequest = () => {
   // Handle request submission
   const handleSubmitRequest = async (e) => {
     e.preventDefault();
-    // Allow direct submit only if patientId exists.
-    // With typeahead, patientId is set when selecting a patient.
-    if (!formPatientId?.trim()) {
-      setMessage("❌ Please search for and select a patient");
-      return;
-    }
 
-    // If user typed something but didn't click a suggestion, patientId won't be set.
-    // Require an actual selection rather than allowing free text.
-    if (!selectedPatient && formPatientId !== formData.patientId) {
-      setMessage("❌ Please search for and select a patient");
+    if (!formData.patientId.trim()) {
+      setMessage("❌ Please enter a patient ID");
       return;
-    }
-
-    // Ensure formData uses the currently selected/typeahead patient.
-    if (formPatientId !== formData.patientId) {
-      setFormData((prev) => ({ ...prev, patientId: formPatientId }));
     }
 
     if (!formData.targetHospitalId) {
@@ -191,8 +108,6 @@ const InterHospitalRecordRequest = () => {
         isEmergency: false,
         duration: 72,
       });
-      setSelectedPatient(null);
-      setPatientSearch("");
       setTimeout(() => setMessage(""), 5000);
     } catch (error) {
       setMessage(
@@ -301,176 +216,21 @@ const InterHospitalRecordRequest = () => {
             <form onSubmit={handleSubmitRequest} className="request-form">
               <h2>Request Medical Records from Another Hospital</h2>
 
-              {/* Patient Search — typeahead only, no separate dropdown */}
+              {/* Patient ID */}
               <div className="form-group">
-                <label>Search Patient *</label>
-                <div ref={searchWrapperRef} style={{ position: "relative" }}>
-                  <input
-                    type="text"
-                    placeholder="Type patient ID or name (e.g. PAT001 or John Doe)"
-                    value={patientSearch}
-                    onChange={handlePatientSearchChange}
-                    onFocus={() =>
-                      patients.length > 0 && setShowSuggestions(true)
-                    }
-                    autoComplete="off"
-                    style={{
-                      borderColor: selectedPatient ? "#68d391" : undefined,
-                    }}
-                  />
-
-                  {patientsLoading && (
-                    <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>
-                      🔄 Searching...
-                    </div>
-                  )}
-
-                  {/* Typeahead suggestions */}
-                  {showSuggestions &&
-                    !patientsLoading &&
-                    patients.length > 0 && (
-                      <ul
-                        style={{
-                          position: "absolute",
-                          top: "100%",
-                          left: 0,
-                          right: 0,
-                          background: "#fff",
-                          border: "1px solid #d1d5db",
-                          borderRadius: 6,
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                          maxHeight: 240,
-                          overflowY: "auto",
-                          zIndex: 100,
-                          margin: 0,
-                          padding: 0,
-                          listStyle: "none",
-                        }}
-                      >
-                        {patients.map((p) => {
-                          const displayName =
-                            p.name ||
-                            `${p.firstName || ""} ${p.lastName || ""}`.trim() ||
-                            "(unknown)";
-                          return (
-                            <li
-                              key={p.patientId}
-                              onMouseDown={() => handlePatientSelect(p)}
-                              style={{
-                                padding: "10px 14px",
-                                cursor: "pointer",
-                                borderBottom: "1px solid #f3f4f6",
-                                fontSize: 14,
-                              }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.background = "#f0f9ff")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.background =
-                                  "transparent")
-                              }
-                            >
-                              <span style={{ fontWeight: 600 }}>
-                                {p.patientId}
-                              </span>
-                              {" — "}
-                              {displayName}
-                              {p.bloodGroup && (
-                                <span
-                                  style={{ color: "#6b7280", marginLeft: 8 }}
-                                >
-                                  · {p.bloodGroup}
-                                </span>
-                              )}
-                              {p.genotype && (
-                                <span
-                                  style={{ color: "#6b7280", marginLeft: 4 }}
-                                >
-                                  · {p.genotype}
-                                </span>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-
-                  {/* No results state */}
-                  {showSuggestions &&
-                    !patientsLoading &&
-                    patientSearch.trim().length >= 2 &&
-                    patients.length === 0 && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: "100%",
-                          left: 0,
-                          right: 0,
-                          background: "#fff",
-                          border: "1px solid #d1d5db",
-                          borderRadius: 6,
-                          padding: "10px 14px",
-                          fontSize: 14,
-                          color: "#6b7280",
-                          zIndex: 100,
-                        }}
-                      >
-                        No patients found for "{patientSearch}"
-                      </div>
-                    )}
-                </div>
-
-                {/* Selected patient confirmation chip */}
-                {selectedPatient && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      padding: "8px 12px",
-                      background: "#f0fff4",
-                      border: "1px solid #68d391",
-                      borderRadius: 6,
-                      fontSize: 13,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span>
-                      ✅{" "}
-                      <strong>
-                        {selectedPatient.name ||
-                          `${selectedPatient.firstName} ${selectedPatient.lastName}`}
-                      </strong>{" "}
-                      ({selectedPatient.patientId})
-                      {selectedPatient.bloodGroup &&
-                        ` · Blood: ${selectedPatient.bloodGroup}`}
-                      {selectedPatient.genotype &&
-                        ` · Genotype: ${selectedPatient.genotype}`}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedPatient(null);
-                        setFormData((prev) => ({ ...prev, patientId: "" }));
-                        setPatientSearch("");
-                      }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#e53e3e",
-                        fontWeight: 600,
-                        fontSize: 16,
-                        lineHeight: 1,
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-
+                <label>Patient ID *</label>
+                <input
+                  type="text"
+                  placeholder="Enter patient ID (e.g. PAT001, PAT-DEMO-001)"
+                  value={formData.patientId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, patientId: e.target.value })
+                  }
+                  required
+                  autoComplete="off"
+                />
                 <small>
-                  All patients registered across the network are searchable
+                  Enter the patient's ID exactly (e.g. PAT001, PAT002, PAT-DEMO-001)
                 </small>
               </div>
 
@@ -700,6 +460,24 @@ const InterHospitalRecordRequest = () => {
                     {request.status === "approved" && (
                       <div className="request-actions">
                         <button
+                          onClick={() => {
+                            navigate(`/records/${request.patientId}`);
+                          }}
+                          className="btn-view-records"
+                          style={{
+                            background: "#3b82f6",
+                            color: "white",
+                            border: "none",
+                            padding: "8px 16px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            fontSize: 14,
+                          }}
+                        >
+                          📋 View Records
+                        </button>
+                        <button
                           onClick={() => handleRevokeAccess(request._id)}
                           className="btn-revoke"
                           disabled={loading}
@@ -801,6 +579,35 @@ const InterHospitalRecordRequest = () => {
                           ⏳ Waiting for {request.targetHospital?.name} to
                           respond
                         </p>
+                      </div>
+                    )}
+                    {request.status === "approved" && (
+                      <div className="request-actions">
+                        <button
+                          onClick={() => {
+                            navigate(`/records/${request.patientId}`);
+                          }}
+                          className="btn-view-records"
+                          style={{
+                            background: "#3b82f6",
+                            color: "white",
+                            border: "none",
+                            padding: "8px 16px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            fontSize: 14,
+                          }}
+                        >
+                          📋 View Records
+                        </button>
+                        <button
+                          onClick={() => handleRevokeAccess(request._id)}
+                          className="btn-revoke"
+                          disabled={loading}
+                        >
+                          🔒 Revoke Access
+                        </button>
                       </div>
                     )}
                   </div>
