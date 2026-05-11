@@ -301,20 +301,34 @@ async function checkRecordAccess(user, patientId) {
   // Doctors/Hospitals: check if home hospital or has access grant
   const { AccessRequest } = require("../models/index");
 
+  // Get the user's hospital ID as a string for comparison
+  // Note: user.hospitalId may be a populated document, so we need to extract _id
+  const userHospitalId = user.hospitalId?._id || user.hospitalId;
+
   // Is this the patient's home hospital?
   const patient = await User.findOne({ patientId, role: "patient" });
   if (!patient) return false;
 
-  if (patient.hospitalId?.toString() === user.hospitalId?.toString())
+  if (patient.hospitalId?.toString() === userHospitalId.toString())
     return true;
 
-  // Check if access was granted
+  // Check if access was granted via inter-hospital request
   const grant = await AccessRequest.findOne({
     patientId,
-    requestingHospital: user.hospitalId,
+    requestingHospital: userHospitalId,
     status: "approved",
     $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
   });
 
-  return !!grant;
+  if (grant) return true;
+
+  // Also check if patient is registered at user's hospital (registeredHospitals)
+  if (patient.registeredHospitals && patient.registeredHospitals.length > 0) {
+    const isRegisteredAtUserHospital = patient.registeredHospitals.some(
+      (h) => h.toString() === userHospitalId.toString()
+    );
+    if (isRegisteredAtUserHospital) return true;
+  }
+
+  return false;
 }

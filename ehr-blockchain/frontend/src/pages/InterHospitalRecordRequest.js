@@ -461,7 +461,8 @@ const InterHospitalRecordRequest = () => {
                       <div className="request-actions">
                         <button
                           onClick={() => {
-                            navigate(`/records/${request.patientId}`);
+                            const recordTypes = request.recordTypes?.join(",") || "all";
+                            navigate(`/records/${request.patientId}?types=${recordTypes}`);
                           }}
                           className="btn-view-records"
                           style={{
@@ -585,7 +586,8 @@ const InterHospitalRecordRequest = () => {
                       <div className="request-actions">
                         <button
                           onClick={() => {
-                            navigate(`/records/${request.patientId}`);
+                            const recordTypes = request.recordTypes?.join(",") || "all";
+                            navigate(`/records/${request.patientId}?types=${recordTypes}`);
                           }}
                           className="btn-view-records"
                           style={{
