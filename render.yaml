@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: medchain-backend
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: cd ehr-blockchain/backend && npm install
+    startCommand: cd ehr-blockchain/backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
