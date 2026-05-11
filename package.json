@@ -7,6 +7,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
+    "postinstall": "npm install --prefix ehr-blockchain/backend",
     "install-backend": "cd ehr-blockchain/backend && npm install",
     "start": "cd ehr-blockchain/backend && npm start",
     "dev": "cd ehr-blockchain/backend && npm run dev",
