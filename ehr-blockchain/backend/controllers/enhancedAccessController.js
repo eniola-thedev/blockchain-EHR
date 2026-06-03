@@ -72,8 +72,11 @@ exports.requestMedicalRecords = async (req, res) => {
     // Patient can access records at target hospital if:
     // 1. Patient is registered at the target hospital (registeredHospitals includes targetHospitalId), OR
     // 2. There's an approved AccessRequest between requesting and target hospitals
-    const isRegisteredAtTarget = patient.registeredHospitals &&
-      patient.registeredHospitals.some(h => h.toString() === targetHospitalId.toString());
+    const isRegisteredAtTarget =
+      patient.registeredHospitals &&
+      patient.registeredHospitals.some(
+        (h) => h.toString() === targetHospitalId.toString(),
+      );
 
     const approvedAccess = await AccessRequest.findOne({
       patientId,
@@ -590,12 +593,18 @@ exports.getAccessStatus = async (req, res) => {
 };
 
 // ─── List All Hospitals (for hospital discovery) ──────────────────────
+// Returns all active hospitals EXCEPT the user's own hospital
+// (users cannot request records from their own hospital)
 exports.getVerifiedHospitals = async (req, res) => {
   try {
-    const hospitals = await Hospital.find({
-      isVerified: true,
-      isActive: true,
-    }).select(
+    // Build filter: exclude own hospital if user belongs to one
+    const filter = { isActive: true };
+
+    if (req.user.hospitalId) {
+      filter._id = { $ne: req.user.hospitalId };
+    }
+
+    const hospitals = await Hospital.find(filter).select(
       "_id name email phone address country licenseNumber walletAddress",
     );
 

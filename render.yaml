@@ -2,12 +2,21 @@ services:
   - type: web
     name: medchain-backend
     env: node
+    nodeVersion: 18.17.1
     region: ohio
     plan: free
-    buildCommand: cd ehr-blockchain/backend && npm install
-    startCommand: cd ehr-blockchain/backend && npm start
+    buildCommand: npm install --prefix ehr-blockchain/backend
+    startCommand: npm start --prefix ehr-blockchain/backend
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
+      - key: CLIENT_URL
+        value: https://your-vercel-domain.vercel.app
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
