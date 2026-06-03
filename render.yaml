@@ -2,7 +2,7 @@ services:
   - type: web
     name: medchain-backend
     env: node
-    nodeVersion: 18.17.1
+    nodeVersion: 20.18.0
     region: ohio
     plan: free
     buildCommand: npm install --prefix ehr-blockchain/backend
@@ -14,9 +14,11 @@ services:
         value: 10000
       - key: CLIENT_URL
         value: https://your-vercel-domain.vercel.app
-      - key: MONGODB_URI
-        sync: false
       - key: JWT_SECRET
         sync: false
-      - key: ENCRYPTION_KEY
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
