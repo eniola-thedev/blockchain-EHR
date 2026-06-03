@@ -21,25 +21,28 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 // Configure CORS for production (Vercel frontend)
+const isProduction = process.env.NODE_ENV === "production";
 const allowedOrigins = [
-  process.env.CLIENT_URL || "http://localhost:3000",
   "http://localhost:3000",
   "http://localhost:3001",
-];
-
-// Add Vercel preview/production URLs if available
-if (process.env.VERCEL_URL) {
-  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
-}
+  process.env.CLIENT_URL,
+  process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
+].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS not allowed"));
-      }
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      // Check if origin is in whitelist
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+
+      // In production, also allow any vercel.app domain
+      if (isProduction && origin.includes("vercel.app"))
+        return callback(null, true);
+
+      callback(new Error("CORS not allowed"));
     },
     credentials: true,
   }),
