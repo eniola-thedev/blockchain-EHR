@@ -16,6 +16,8 @@ exports.registerHospital = async (req, res) => {
     const { name, email, password, licenseNumber, phone, address, country } =
       req.body;
 
+    console.log("🔍 Register Hospital:", { name, email, licenseNumber });
+
     // Create hospital
     const { data: hospitalData, error: hospitalError } = await supabase
       .from("hospitals")
@@ -34,10 +36,13 @@ exports.registerHospital = async (req, res) => {
       .single();
 
     if (hospitalError) {
+      console.error("❌ Hospital creation error:", hospitalError);
       return res.status(400).json({ error: hospitalError.message });
     }
 
-    // Create user account in Supabase Auth
+    console.log("✅ Hospital created:", hospitalData.id);
+
+    // Create auth user in Supabase
     const { data: authData, error: authError } =
       await supabase.auth.admin.createUser({
         email,
@@ -46,10 +51,13 @@ exports.registerHospital = async (req, res) => {
       });
 
     if (authError) {
+      console.error("❌ Auth creation error:", authError);
       // Rollback hospital creation
       await supabase.from("hospitals").delete().eq("id", hospitalData.id);
       return res.status(400).json({ error: authError.message });
     }
+
+    console.log("✅ Auth user created:", authData.user.id);
 
     // Create user record in users table
     const { data: userData, error: userError } = await supabase
