@@ -20,30 +20,10 @@ const PORT = process.env.PORT || 5000;
 // ─── Security Middleware ────────────────────────────────────────────
 app.use(helmet());
 
-// Configure CORS for production (Vercel frontend)
-const isProduction = process.env.NODE_ENV === "production";
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-  process.env.CLIENT_URL,
-  process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
-].filter(Boolean);
-
+// Configure CORS - Allow all origins in production
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-
-      // Check if origin is in whitelist
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-
-      // In production, also allow any vercel.app domain
-      if (isProduction && origin.includes("vercel.app"))
-        return callback(null, true);
-
-      callback(new Error("CORS not allowed"));
-    },
+    origin: true, // Allow all origins
     credentials: true,
   }),
 );
