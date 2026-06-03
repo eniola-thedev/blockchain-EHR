@@ -19,9 +19,28 @@ const PORT = process.env.PORT || 5000;
 
 // ─── Security Middleware ────────────────────────────────────────────
 app.use(helmet());
+
+// Configure CORS for production (Vercel frontend)
+const allowedOrigins = [
+  process.env.CLIENT_URL || "http://localhost:3000",
+  "http://localhost:3000",
+  "http://localhost:3001",
+];
+
+// Add Vercel preview/production URLs if available
+if (process.env.VERCEL_URL) {
+  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
     credentials: true,
   }),
 );
@@ -70,6 +89,25 @@ app.use("/api/access", accessRoutes);
 app.use("/api/audit", auditRoutes);
 app.use("/api/portal", patientPortalRoutes);
 app.use("/api/inter-hospital", enhancedAccessRoutes);
+
+// Root route
+app.get("/", (req, res) =>
+  res.json({
+    message: "🏥 MedChain EHR Blockchain Backend API",
+    status: "running",
+    version: "1.0.0",
+    endpoints: {
+      health: "/health",
+      auth: "/api/auth",
+      records: "/api/records",
+      hospitals: "/api/hospitals",
+      access: "/api/access",
+      audit: "/api/audit",
+      portal: "/api/portal",
+      interHospital: "/api/inter-hospital",
+    },
+  }),
+);
 
 // Health check
 app.get("/health", (req, res) =>
