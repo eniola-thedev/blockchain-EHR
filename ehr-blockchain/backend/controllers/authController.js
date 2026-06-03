@@ -223,6 +223,59 @@ exports.registerPatient = async (req, res) => {
   }
 };
 
+// ─── Register Patient By Doctor ────────────────────────────────────
+exports.registerPatientByDoctor = async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, bloodGroup, genotype } =
+      req.body;
+
+    const patientId = generatePatientId();
+
+    // Create auth user
+    const { data: authData, error: authError } =
+      await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+
+    if (authError) {
+      return res.status(400).json({ error: authError.message });
+    }
+
+    // Create patient record
+    const { data: patientData, error: patientError } = await supabase
+      .from("users")
+      .insert([
+        {
+          id: authData.user.id,
+          email,
+          role: "patient",
+          patient_id: patientId,
+          first_name: firstName,
+          last_name: lastName,
+          blood_group: bloodGroup,
+          genotype,
+          hospital_id: req.user.hospital_id,
+        },
+      ])
+      .select()
+      .single();
+
+    if (patientError) {
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      return res.status(400).json({ error: patientError.message });
+    }
+
+    res.status(201).json({
+      message: "Patient registered successfully",
+      patient: patientData,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ─── Login ──────────────────────────────────────────────────────────
 exports.login = async (req, res) => {
   try {
