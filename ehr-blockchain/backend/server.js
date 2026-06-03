@@ -8,10 +8,11 @@ require("dotenv").config();
 
 const { supabase } = require("./services/supabaseClient");
 const authRoutes = require("./routes/auth");
-const recordRoutes = require("./routes/records");
-const hospitalRoutes = require("./routes/hospitals");
-const accessRoutes = require("./routes/access");
-const auditRoutes = require("./routes/audit");
+// TODO: Update these routes to use Supabase instead of MongoDB
+// const recordRoutes = require("./routes/records");
+// const hospitalRoutes = require("./routes/hospitals");
+// const accessRoutes = require("./routes/access");
+// const auditRoutes = require("./routes/audit");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -89,10 +90,11 @@ app.get("/health", (req, res) =>
 );
 
 app.use("/api/auth", authRoutes);
-app.use("/api/records", recordRoutes);
-app.use("/api/hospitals", hospitalRoutes);
-app.use("/api/access", accessRoutes);
-app.use("/api/audit", auditRoutes);
+// TODO: Update these routes to use Supabase
+// app.use("/api/records", recordRoutes);
+// app.use("/api/hospitals", hospitalRoutes);
+// app.use("/api/access", accessRoutes);
+// app.use("/api/audit", auditRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {
