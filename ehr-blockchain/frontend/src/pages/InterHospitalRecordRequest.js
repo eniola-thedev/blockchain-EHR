@@ -1,9 +1,3 @@
-/**
- * Inter-Hospital Record Request Component
- * Clear separation between INCOMING (requests TO this hospital)
- * and OUTGOING (requests FROM this hospital)
- */
-
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
@@ -31,7 +25,6 @@ const InterHospitalRecordRequest = () => {
   const [showViewRecordsModal, setShowViewRecordsModal] = useState(false);
   const [recordsModalData, setRecordsModalData] = useState(null);
 
-  // Fetch verified hospitals
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
@@ -44,7 +37,6 @@ const InterHospitalRecordRequest = () => {
     fetchHospitals();
   }, []);
 
-  // Fetch incoming requests
   const fetchIncomingRequests = async () => {
     try {
       setLoading(true);
@@ -53,14 +45,12 @@ const InterHospitalRecordRequest = () => {
       );
       setIncomingRequests(response.data.requests || []);
     } catch (error) {
-      console.error("Failed to fetch incoming requests:", error);
       setMessage("❌ Failed to fetch incoming requests");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch outgoing requests
   const fetchOutgoingRequests = async () => {
     try {
       setLoading(true);
@@ -69,30 +59,20 @@ const InterHospitalRecordRequest = () => {
       );
       setOutgoingRequests(response.data.requests || []);
     } catch (error) {
-      console.error("Failed to fetch outgoing requests:", error);
       setMessage("❌ Failed to fetch outgoing requests");
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle request submission
   const handleSubmitRequest = async (e) => {
     e.preventDefault();
-
-    if (!formData.patientId.trim()) {
-      setMessage("❌ Please enter a patient ID");
-      return;
-    }
-
-    if (!formData.targetHospitalId) {
-      setMessage("❌ Please select a target hospital");
-      return;
-    }
-    if (!formData.reason.trim()) {
-      setMessage("❌ Please provide a reason for the request");
-      return;
-    }
+    if (!formData.patientId.trim())
+      return setMessage("❌ Please enter a patient ID");
+    if (!formData.targetHospitalId)
+      return setMessage("❌ Please select a target hospital");
+    if (!formData.reason.trim())
+      return setMessage("❌ Please provide a reason");
 
     try {
       setLoading(true);
@@ -118,19 +98,12 @@ const InterHospitalRecordRequest = () => {
     }
   };
 
-  // Handle approve request
   const handleApproveRequest = async (requestId, patientId) => {
     try {
       setLoading(true);
-      const request = incomingRequests.find((r) => r._id === requestId);
       await api.post(`/inter-hospital/${requestId}/approve`, { duration: 72 });
       setMessage("✅ Request approved successfully");
-      setRecordsModalData({
-        patientId,
-        requestId,
-        requestingHospitalName:
-          request?.requestingHospital?.name || "Unknown Hospital",
-      });
+      setRecordsModalData({ patientId, requestId });
       setShowViewRecordsModal(true);
       fetchIncomingRequests();
     } catch (error) {
@@ -140,7 +113,6 @@ const InterHospitalRecordRequest = () => {
     }
   };
 
-  // Handle deny request
   const handleDenyRequest = async (requestId) => {
     const reason = prompt("Enter denial reason (optional):");
     if (reason === null) return;
@@ -159,20 +131,18 @@ const InterHospitalRecordRequest = () => {
     }
   };
 
-  // Handle revoke access
   const handleRevokeAccess = async (requestId) => {
-    if (window.confirm("Are you sure you want to revoke this access?")) {
-      try {
-        setLoading(true);
-        await api.post(`/inter-hospital/${requestId}/revoke`);
-        setMessage("✅ Access revoked successfully");
-        fetchOutgoingRequests();
-        setTimeout(() => setMessage(""), 5000);
-      } catch (error) {
-        setMessage(`❌ ${error.response?.data?.error || error.message}`);
-      } finally {
-        setLoading(false);
-      }
+    if (!window.confirm("Are you sure you want to revoke this access?")) return;
+    try {
+      setLoading(true);
+      await api.post(`/inter-hospital/${requestId}/revoke`);
+      setMessage("✅ Access revoked successfully");
+      fetchOutgoingRequests();
+      setTimeout(() => setMessage(""), 5000);
+    } catch (error) {
+      setMessage(`❌ ${error.response?.data?.error || error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -216,25 +186,22 @@ const InterHospitalRecordRequest = () => {
             <form onSubmit={handleSubmitRequest} className="request-form">
               <h2>Request Medical Records from Another Hospital</h2>
 
-              {/* Patient ID */}
               <div className="form-group">
                 <label>Patient ID *</label>
                 <input
                   type="text"
-                  placeholder="Enter patient ID (e.g. PAT001, PAT-DEMO-001)"
+                  placeholder="Enter patient ID (e.g. PAT001)"
                   value={formData.patientId}
                   onChange={(e) =>
                     setFormData({ ...formData, patientId: e.target.value })
                   }
                   required
-                  autoComplete="off"
                 />
                 <small>
-                  Enter the patient's ID exactly (e.g. PAT001, PAT002, PAT-DEMO-001)
+                  Enter the patient's ID exactly (e.g. PAT001, PAT002)
                 </small>
               </div>
 
-              {/* Target Hospital */}
               <div className="form-group">
                 <label>Request Records FROM Hospital *</label>
                 <select
@@ -249,7 +216,7 @@ const InterHospitalRecordRequest = () => {
                 >
                   <option value="">-- Select Hospital --</option>
                   {hospitals.map((hospital) => (
-                    <option key={hospital._id} value={hospital._id}>
+                    <option key={hospital.id} value={hospital.id}>
                       {hospital.name}
                     </option>
                   ))}
@@ -259,11 +226,10 @@ const InterHospitalRecordRequest = () => {
                 </small>
               </div>
 
-              {/* Reason */}
               <div className="form-group">
                 <label>Reason for Request *</label>
                 <textarea
-                  placeholder="Explain why you need these medical records (e.g., Patient is being treated for acute condition, needs continuation of care, etc.)"
+                  placeholder="Explain why you need these medical records..."
                   value={formData.reason}
                   onChange={(e) =>
                     setFormData({ ...formData, reason: e.target.value })
@@ -282,7 +248,7 @@ const InterHospitalRecordRequest = () => {
                     onChange={(e) => {
                       const selected = Array.from(
                         e.target.selectedOptions,
-                        (option) => option.value,
+                        (o) => o.value,
                       );
                       setFormData({
                         ...formData,
@@ -339,7 +305,6 @@ const InterHospitalRecordRequest = () => {
               </button>
             </form>
 
-            {/* Hospital Directory */}
             <div className="hospital-directory">
               <h3>📍 Available Hospitals</h3>
               <div className="hospitals-grid">
@@ -347,14 +312,14 @@ const InterHospitalRecordRequest = () => {
                   <p>No hospitals available</p>
                 ) : (
                   hospitals.map((hospital) => (
-                    <div key={hospital._id} className="hospital-card">
+                    <div key={hospital.id} className="hospital-card">
                       <h4>{hospital.name}</h4>
                       <p>📧 {hospital.email}</p>
                       {hospital.phone && <p>📞 {hospital.phone}</p>}
                       {hospital.address && <p>📍 {hospital.address}</p>}
                       <p>🌍 {hospital.country}</p>
                       <p className="license">
-                        License: {hospital.licenseNumber}
+                        License: {hospital.license_number}
                       </p>
                     </div>
                   ))
@@ -378,7 +343,7 @@ const InterHospitalRecordRequest = () => {
                 <option value="all">All Status</option>
                 <option value="pending">⏳ Pending</option>
                 <option value="approved">✅ Approved</option>
-                <option value="denied">❌ Denied</option>
+                <option value="rejected">❌ Denied</option>
                 <option value="revoked">🔒 Revoked</option>
               </select>
             </div>
@@ -391,49 +356,27 @@ const InterHospitalRecordRequest = () => {
               <div className="requests-list">
                 {incomingRequests.map((request) => (
                   <div
-                    key={request._id}
+                    key={request.id}
                     className={`request-card ${request.status}`}
                   >
                     <div className="request-header">
-                      <h3>
-                        🏥{" "}
-                        {request.requestingHospital?.name || "Unknown Hospital"}
-                      </h3>
+                      <h3>🏥 Request for Patient: {request.patient_id}</h3>
                       <span className={`status-badge ${request.status}`}>
                         {request.status.toUpperCase()}
                       </span>
                     </div>
                     <div className="request-body">
                       <p>
-                        <strong>Patient:</strong> {request.patientId}
+                        <strong>Patient ID:</strong> {request.patient_id}
                       </p>
-                      {request.patient && (
-                        <>
-                          <p>
-                            <strong>Name:</strong> {request.patient.name}
-                          </p>
-                          <p>
-                            <strong>Blood Group:</strong>{" "}
-                            {request.patient.bloodGroup || "N/A"}
-                          </p>
-                          <p>
-                            <strong>Genotype:</strong>{" "}
-                            {request.patient.genotype || "N/A"}
-                          </p>
-                        </>
-                      )}
                       <p>
                         <strong>Reason:</strong> {request.reason}
                       </p>
                       <p>
-                        <strong>Records Requested:</strong>{" "}
-                        {request.recordTypes?.join(", ") || "all"}
-                      </p>
-                      <p>
                         <strong>Requested:</strong>{" "}
-                        {new Date(request.createdAt).toLocaleDateString()}
+                        {new Date(request.created_at).toLocaleDateString()}
                       </p>
-                      {request.isEmergency && (
+                      {request.is_emergency && (
                         <p className="emergency">🚨 EMERGENCY REQUEST</p>
                       )}
                     </div>
@@ -441,7 +384,7 @@ const InterHospitalRecordRequest = () => {
                       <div className="request-actions">
                         <button
                           onClick={() =>
-                            handleApproveRequest(request._id, request.patientId)
+                            handleApproveRequest(request.id, request.patient_id)
                           }
                           className="btn-approve"
                           disabled={loading}
@@ -449,7 +392,7 @@ const InterHospitalRecordRequest = () => {
                           ✅ Approve
                         </button>
                         <button
-                          onClick={() => handleDenyRequest(request._id)}
+                          onClick={() => handleDenyRequest(request.id)}
                           className="btn-deny"
                           disabled={loading}
                         >
@@ -460,10 +403,9 @@ const InterHospitalRecordRequest = () => {
                     {request.status === "approved" && (
                       <div className="request-actions">
                         <button
-                          onClick={() => {
-                            const recordTypes = request.recordTypes?.join(",") || "all";
-                            navigate(`/records/${request.patientId}?types=${recordTypes}`);
-                          }}
+                          onClick={() =>
+                            navigate(`/records/${request.patient_id}`)
+                          }
                           className="btn-view-records"
                           style={{
                             background: "#3b82f6",
@@ -473,13 +415,12 @@ const InterHospitalRecordRequest = () => {
                             borderRadius: "6px",
                             cursor: "pointer",
                             fontWeight: 600,
-                            fontSize: 14,
                           }}
                         >
                           📋 View Records
                         </button>
                         <button
-                          onClick={() => handleRevokeAccess(request._id)}
+                          onClick={() => handleRevokeAccess(request.id)}
                           className="btn-revoke"
                           disabled={loading}
                         >
@@ -508,7 +449,7 @@ const InterHospitalRecordRequest = () => {
                 <option value="all">All Status</option>
                 <option value="pending">⏳ Pending</option>
                 <option value="approved">✅ Approved</option>
-                <option value="denied">❌ Denied</option>
+                <option value="rejected">❌ Denied</option>
                 <option value="revoked">🔒 Revoked</option>
               </select>
             </div>
@@ -521,75 +462,63 @@ const InterHospitalRecordRequest = () => {
               <div className="requests-list">
                 {outgoingRequests.map((request) => (
                   <div
-                    key={request._id}
+                    key={request.id}
                     className={`request-card ${request.status}`}
                   >
                     <div className="request-header">
-                      <h3>
-                        🏥 {request.targetHospital?.name || "Unknown Hospital"}
-                      </h3>
+                      <h3>🏥 Request for Patient: {request.patient_id}</h3>
                       <span className={`status-badge ${request.status}`}>
                         {request.status.toUpperCase()}
                       </span>
                     </div>
                     <div className="request-body">
                       <p>
-                        <strong>Patient:</strong> {request.patientId}
-                        {request.patientName ? ` (${request.patientName})` : ""}
+                        <strong>Patient ID:</strong> {request.patient_id}
                       </p>
                       <p>
                         <strong>Reason:</strong> {request.reason}
                       </p>
                       <p>
-                        <strong>Records Requested:</strong>{" "}
-                        {request.recordTypes?.join(", ") || "all"}
-                      </p>
-                      <p>
                         <strong>Requested:</strong>{" "}
-                        {new Date(request.createdAt).toLocaleDateString()}
+                        {new Date(request.created_at).toLocaleDateString()}
                       </p>
-                      {request.grantedAt && (
+                      {request.granted_at && (
                         <p>
                           <strong>Approved:</strong>{" "}
-                          {new Date(request.grantedAt).toLocaleDateString()}
+                          {new Date(request.granted_at).toLocaleDateString()}
                         </p>
                       )}
-                      {request.expiresAt && request.status === "approved" && (
-                        <>
-                          <p>
-                            <strong>Expires:</strong>{" "}
-                            {new Date(request.expiresAt).toLocaleDateString()}
-                          </p>
-                          <p className="remaining">
-                            (
-                            {Math.max(
-                              0,
-                              Math.floor(
-                                (new Date(request.expiresAt) - new Date()) /
-                                  (1000 * 60 * 60),
-                              ),
-                            )}{" "}
-                            hours remaining)
-                          </p>
-                        </>
+                      {request.expires_at && request.status === "approved" && (
+                        <p>
+                          <strong>Expires:</strong>{" "}
+                          {new Date(request.expires_at).toLocaleDateString()} (
+                          {Math.max(
+                            0,
+                            Math.floor(
+                              (new Date(request.expires_at) - new Date()) /
+                                (1000 * 60 * 60),
+                            ),
+                          )}{" "}
+                          hours remaining)
+                        </p>
+                      )}
+                      {request.is_emergency && (
+                        <p className="emergency">🚨 EMERGENCY REQUEST</p>
                       )}
                     </div>
                     {request.status === "pending" && (
                       <div className="request-status">
                         <p className="info">
-                          ⏳ Waiting for {request.targetHospital?.name} to
-                          respond
+                          ⏳ Waiting for hospital to respond
                         </p>
                       </div>
                     )}
                     {request.status === "approved" && (
                       <div className="request-actions">
                         <button
-                          onClick={() => {
-                            const recordTypes = request.recordTypes?.join(",") || "all";
-                            navigate(`/records/${request.patientId}?types=${recordTypes}`);
-                          }}
-                          className="btn-view-records"
+                          onClick={() =>
+                            navigate(`/records/${request.patient_id}`)
+                          }
                           style={{
                             background: "#3b82f6",
                             color: "white",
@@ -598,13 +527,12 @@ const InterHospitalRecordRequest = () => {
                             borderRadius: "6px",
                             cursor: "pointer",
                             fontWeight: 600,
-                            fontSize: 14,
                           }}
                         >
                           📋 View Records
                         </button>
                         <button
-                          onClick={() => handleRevokeAccess(request._id)}
+                          onClick={() => handleRevokeAccess(request.id)}
                           className="btn-revoke"
                           disabled={loading}
                         >
@@ -629,10 +557,6 @@ const InterHospitalRecordRequest = () => {
               <div className="modal-content">
                 <p>
                   <strong>Patient ID:</strong> {recordsModalData.patientId}
-                </p>
-                <p>
-                  <strong>Requested by:</strong>{" "}
-                  {recordsModalData.requestingHospitalName}
                 </p>
                 <p>
                   <strong>Access granted at:</strong>{" "}

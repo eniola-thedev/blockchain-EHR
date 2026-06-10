@@ -1,186 +1,146 @@
-const { AccessRequest, AuditLog } = require("../models/index");
-const User = require("../models/User");
+// controllers/accessController.js (Supabase version)
+const { supabase } = require("../services/supabaseClient");
 const blockchainService = require("../services/blockchainService");
 
-// ─── Request Access (Hospital B → Hospital A's patient) ─────────────
+// ─── Request Access ──────────────────────────────────────────────────
 exports.requestAccess = async (req, res) => {
   try {
     const { patientId, reason, isEmergency = false } = req.body;
 
-    // Verify patient exists
-    const patient = await User.findOne({ patientId, role: "patient" });
+    const { data: patient } = await supabase
+      .from("users")
+      .select("*")
+      .eq("patient_id", patientId)
+      .eq("role", "patient")
+      .maybeSingle();
+
     if (!patient) return res.status(404).json({ error: "Patient not found" });
 
-    // Prevent duplicate active requests
-    const existing = await AccessRequest.findOne({
-      patientId,
-      requestingHospital: req.user.hospitalId,
-      status: { $in: ["pending", "approved"] },
-    });
-    if (existing) {
-      return res.status(409).json({
-        error: "Active request already exists",
-        request: existing,
-      });
-    }
+    // Check for duplicate
+    const { data: existing } = await supabase
+      .from("access_requests")
+      .select("*")
+      .eq("patient_id", patientId)
+      .eq("requesting_hospital_id", req.user.hospitalId)
+      .in("status", ["pending", "approved"])
+      .maybeSingle();
 
-    // Auto-approve emergency requests (24h access)
+    if (existing)
+      return res
+        .status(409)
+        .json({ error: "Active request already exists", request: existing });
+
     const status = isEmergency ? "approved" : "pending";
-    const grantedAt = isEmergency ? new Date() : null;
+    const grantedAt = isEmergency ? new Date().toISOString() : null;
     const expiresAt = isEmergency
-      ? new Date(Date.now() + 24 * 60 * 60 * 1000)
+      ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       : null;
 
-    // Log on blockchain
-    let txHash = null;
-    try {
-      const tx = await blockchainService.requestAccess(patientId, isEmergency);
-      txHash = tx?.hash;
-    } catch (e) {
-      console.warn("Blockchain log failed:", e.message);
-    }
+    const { data: accessRequest, error } = await supabase
+      .from("access_requests")
+      .insert([
+        {
+          patient_id: patientId,
+          requesting_hospital_id: req.user.hospitalId,
+          home_hospital_id: patient.hospital_id,
+          reason,
+          is_emergency: isEmergency,
+          status,
+          granted_at: grantedAt,
+          expires_at: expiresAt,
+        },
+      ])
+      .select()
+      .single();
 
-    const accessRequest = await AccessRequest.create({
-      patientId,
-      requestingHospital: req.user.hospitalId,
-      homeHospital: patient.hospitalId,
-      reason,
-      isEmergency,
-      status,
-      grantedAt,
-      expiresAt,
-      blockchainTxHash: txHash,
-    });
+    if (error) return res.status(400).json({ error: error.message });
 
-    await AuditLog.create({
-      action: "ACCESS_REQUESTED",
-      performedBy: req.user._id,
-      patientId,
-      hospitalId: req.user.hospitalId,
-      details: { reason, isEmergency, status, txHash },
-      ipAddress: req.ip,
-    });
+    await supabase.from("audit_logs").insert([
+      {
+        action: "ACCESS_REQUESTED",
+        performed_by_id: req.user.id,
+        hospital_id: req.user.hospitalId,
+        details: { reason, isEmergency, status, patientId },
+        ip_address: req.ip,
+      },
+    ]);
 
     res.status(201).json({
       message: isEmergency
         ? "Emergency access granted for 24 hours"
-        : "Access request submitted. Awaiting approval.",
-      requestId: accessRequest._id,
+        : "Access request submitted.",
+      requestId: accessRequest.id,
       status,
       expiresAt,
-      txHash,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// ─── Grant Access (Home Hospital approves request) ──────────────────
+// ─── Grant Access ────────────────────────────────────────────────────
 exports.grantAccess = async (req, res) => {
   try {
     const { requestId } = req.params;
     const { durationHours = 72 } = req.body;
 
-    const request = await AccessRequest.findById(requestId)
-      .populate("requestingHospital")
-      .populate("homeHospital");
+    const { data: request } = await supabase
+      .from("access_requests")
+      .select("*")
+      .eq("id", requestId)
+      .maybeSingle();
 
     if (!request) return res.status(404).json({ error: "Request not found" });
-    if (request.status !== "pending") {
+    if (request.status !== "pending")
       return res
         .status(400)
         .json({ error: `Request is already ${request.status}` });
-    }
 
-    // Only the home hospital can approve
-    const homeHospitalId =
-      request.homeHospital?._id?.toString() || request.homeHospital?.toString();
-    const userHospitalId =
-      req.user.hospitalId?._id?.toString() || req.user.hospitalId?.toString();
+    const expiresAt = new Date(
+      Date.now() + durationHours * 60 * 60 * 1000,
+    ).toISOString();
 
-    if (
-      !homeHospitalId ||
-      !userHospitalId ||
-      homeHospitalId !== userHospitalId
-    ) {
-      return res
-        .status(403)
-        .json({ error: "Only the home hospital can grant access" });
-    }
+    const { error } = await supabase
+      .from("access_requests")
+      .update({
+        status: "approved",
+        granted_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      })
+      .eq("id", requestId);
 
-    const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000);
+    if (error) return res.status(400).json({ error: error.message });
 
-    request.status = "approved";
-    request.grantedAt = new Date();
-    request.expiresAt = expiresAt;
-    await request.save();
-
-    // Log on blockchain
-    let txHash = null;
-    try {
-      const tx = await blockchainService.grantAccess(
-        request.patientId,
-        request.requestingHospital.walletAddress,
-        durationHours * 3600,
-      );
-      txHash = tx?.hash;
-      request.blockchainTxHash = txHash;
-      await request.save();
-    } catch (e) {
-      console.warn("Blockchain failed:", e.message);
-    }
-
-    await AuditLog.create({
-      action: "ACCESS_GRANTED",
-      performedBy: req.user._id,
-      patientId: request.patientId,
-      hospitalId: req.user.hospitalId,
-      details: {
-        grantedTo: request.requestingHospital.name,
-        durationHours,
-        expiresAt,
-        txHash,
+    await supabase.from("audit_logs").insert([
+      {
+        action: "ACCESS_GRANTED",
+        performed_by_id: req.user.id,
+        hospital_id: req.user.hospitalId,
+        details: { durationHours, expiresAt, patientId: request.patient_id },
+        ip_address: req.ip,
       },
-      ipAddress: req.ip,
-    });
+    ]);
 
     res.json({
       message: `Access granted for ${durationHours} hours`,
       expiresAt,
-      txHash,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// ─── Revoke Access ──────────────────────────────────────────────────
+// ─── Revoke Access ───────────────────────────────────────────────────
 exports.revokeAccess = async (req, res) => {
   try {
     const { requestId } = req.params;
-    const request = await AccessRequest.findById(requestId);
 
-    if (!request) return res.status(404).json({ error: "Request not found" });
+    const { error } = await supabase
+      .from("access_requests")
+      .update({ status: "revoked" })
+      .eq("id", requestId);
 
-    request.status = "revoked";
-    request.revokedAt = new Date();
-    request.revokedBy = req.user._id;
-    await request.save();
-
-    // Blockchain revoke
-    try {
-      const hospital = await require("../models/index").Hospital.findById(
-        request.requestingHospital,
-      );
-      if (hospital?.walletAddress) {
-        await blockchainService.revokeAccess(
-          request.patientId,
-          hospital.walletAddress,
-        );
-      }
-    } catch (e) {
-      /* non-critical */
-    }
+    if (error) return res.status(400).json({ error: error.message });
 
     res.json({ message: "Access revoked successfully" });
   } catch (err) {
@@ -188,16 +148,21 @@ exports.revokeAccess = async (req, res) => {
   }
 };
 
-// ─── Get Incoming Requests (for home hospital) ──────────────────────
+// ─── Get Incoming Requests ───────────────────────────────────────────
 exports.getIncomingRequests = async (req, res) => {
   try {
     const { status } = req.query;
-    const filter = { homeHospital: req.user.hospitalId };
-    if (status) filter.status = status;
 
-    const requests = await AccessRequest.find(filter)
-      .populate("requestingHospital", "name country licenseNumber")
-      .sort({ createdAt: -1 });
+    let query = supabase
+      .from("access_requests")
+      .select("*")
+      .eq("home_hospital_id", req.user.hospitalId)
+      .order("created_at", { ascending: false });
+
+    if (status && status !== "all") query = query.eq("status", status);
+
+    const { data: requests, error } = await query;
+    if (error) return res.status(400).json({ error: error.message });
 
     res.json({ requests });
   } catch (err) {
@@ -205,14 +170,21 @@ exports.getIncomingRequests = async (req, res) => {
   }
 };
 
-// ─── Get Outgoing Requests (for requesting hospital) ────────────────
+// ─── Get Outgoing Requests ───────────────────────────────────────────
 exports.getOutgoingRequests = async (req, res) => {
   try {
-    const requests = await AccessRequest.find({
-      requestingHospital: req.user.hospitalId,
-    })
-      .populate("homeHospital", "name country")
-      .sort({ createdAt: -1 });
+    const { status } = req.query;
+
+    let query = supabase
+      .from("access_requests")
+      .select("*")
+      .eq("requesting_hospital_id", req.user.hospitalId)
+      .order("created_at", { ascending: false });
+
+    if (status && status !== "all") query = query.eq("status", status);
+
+    const { data: requests, error } = await query;
+    if (error) return res.status(400).json({ error: error.message });
 
     res.json({ requests });
   } catch (err) {
@@ -220,33 +192,37 @@ exports.getOutgoingRequests = async (req, res) => {
   }
 };
 
-// ─── Check Access Status ────────────────────────────────────────────
+// ─── Check Access ────────────────────────────────────────────────────
 exports.checkAccess = async (req, res) => {
   try {
     const { patientId } = req.params;
 
-    const patient = await User.findOne({ patientId, role: "patient" });
+    const { data: patient } = await supabase
+      .from("users")
+      .select("*")
+      .eq("patient_id", patientId)
+      .maybeSingle();
+
     if (!patient) return res.status(404).json({ error: "Patient not found" });
 
-    // Check if requesting hospital is the home hospital
-    const isHome =
-      patient.hospitalId?.toString() === req.user.hospitalId?.toString();
-    if (isHome) return res.json({ hasAccess: true, type: "home_hospital" });
+    if (patient.hospital_id === req.user.hospitalId) {
+      return res.json({ hasAccess: true, type: "home_hospital" });
+    }
 
-    // Check grant
-    const grant = await AccessRequest.findOne({
-      patientId,
-      requestingHospital: req.user.hospitalId,
-      status: "approved",
-      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-    });
+    const { data: grant } = await supabase
+      .from("access_requests")
+      .select("*")
+      .eq("patient_id", patientId)
+      .eq("requesting_hospital_id", req.user.hospitalId)
+      .eq("status", "approved")
+      .maybeSingle();
 
     if (grant) {
       return res.json({
         hasAccess: true,
-        type: grant.isEmergency ? "emergency" : "granted",
-        expiresAt: grant.expiresAt,
-        grantedAt: grant.grantedAt,
+        type: grant.is_emergency ? "emergency" : "granted",
+        expiresAt: grant.expires_at,
+        grantedAt: grant.granted_at,
       });
     }
 
@@ -256,41 +232,25 @@ exports.checkAccess = async (req, res) => {
   }
 };
 
-// ─── Get Available Hospitals (for sending access requests) ──────────
+// ─── Get Available Hospitals ─────────────────────────────────────────
 exports.getAvailableHospitals = async (req, res) => {
   try {
     const { search } = req.query;
 
-    // Get all hospitals except the current user's hospital
-    const filter = {
-      isActive: true,
-      isVerified: true,
-      _id: { $ne: req.user.hospitalId },
-    };
+    let query = supabase
+      .from("hospitals")
+      .select("id, name, address, phone, email, license_number")
+      .eq("is_active", true)
+      .eq("is_verified", true)
+      .neq("id", req.user.hospitalId)
+      .order("name");
 
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { address: { $regex: search, $options: "i" } },
-        { licenseNumber: { $regex: search, $options: "i" } },
-      ];
-    }
+    if (search) query = query.ilike("name", `%${search}%`);
 
-    const hospitals = await require("../models/index")
-      .Hospital.find(filter)
-      .select("_id name address phone email licenseNumber")
-      .sort({ name: 1 });
+    const { data: hospitals, error } = await query;
+    if (error) return res.status(400).json({ error: error.message });
 
-    res.json({
-      hospitals: hospitals.map((h) => ({
-        _id: h._id,
-        name: h.name,
-        address: h.address,
-        phone: h.phone,
-        email: h.email,
-        licenseNumber: h.licenseNumber,
-      })),
-    });
+    res.json({ hospitals });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

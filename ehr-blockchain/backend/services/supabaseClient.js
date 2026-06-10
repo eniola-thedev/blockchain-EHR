@@ -16,7 +16,15 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 // Anon client for client-side operations (respects RLS)
 const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
 
-module.exports = {
-  supabase,
-  supabaseAnon,
-};
+console.log("🔑 Supabase URL:", supabaseUrl ? "✅ found" : "❌ MISSING");
+console.log(
+  "🔑 Service Role Key:",
+  supabaseServiceRoleKey ? "✅ found" : "❌ MISSING",
+);
+console.log("🔑 Anon Key:", supabaseAnonKey ? "✅ found" : "❌ MISSING");
+console.log(
+  "🔑 Using service role key:",
+  supabaseServiceRoleKey?.substring(0, 20) + "...",
+);
+
+module.exports = { supabase, supabaseAnon };

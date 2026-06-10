@@ -1,42 +1,73 @@
-const express  = require("express");
-const router   = express.Router();
-const { Hospital } = require("../models/index");
-const User     = require("../models/User");
+const express = require("express");
+const router = express.Router();
+const { supabase } = require("../services/supabaseClient");
 const { authenticate, requireRole } = require("../middleware/auth");
 
 router.get("/", authenticate, async (req, res) => {
   try {
-    const hospitals = await Hospital.find({ isActive: true })
-      .select("name country licenseNumber isVerified");
+    const { data: hospitals, error } = await supabase
+      .from("hospitals")
+      .select("id, name, country, license_number, is_verified")
+      .eq("is_active", true);
+    if (error) return res.status(400).json({ error: error.message });
     res.json({ hospitals });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get("/patient/:patientId/home", authenticate, async (req, res) => {
   try {
-    const patient = await User.findOne({ patientId: req.params.patientId })
-      .populate("hospitalId", "name country phone email");
+    const { data: patient } = await supabase
+      .from("users")
+      .select("hospital_id")
+      .eq("patient_id", req.params.patientId)
+      .maybeSingle();
     if (!patient) return res.status(404).json({ error: "Patient not found" });
-    res.json({ homeHospital: patient.hospitalId });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+
+    const { data: hospital } = await supabase
+      .from("hospitals")
+      .select("id, name, country, phone, email")
+      .eq("id", patient.hospital_id)
+      .maybeSingle();
+    res.json({ homeHospital: hospital });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get("/:id", authenticate, async (req, res) => {
   try {
-    const hospital = await Hospital.findById(req.params.id).select("-__v");
+    const { data: hospital, error } = await supabase
+      .from("hospitals")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
     if (!hospital) return res.status(404).json({ error: "Not found" });
     res.json({ hospital });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.patch("/:id/verify", authenticate, requireRole("admin"), async (req, res) => {
-  try {
-    const hospital = await Hospital.findByIdAndUpdate(
-      req.params.id, { isVerified: true }, { new: true }
-    );
-    if (!hospital) return res.status(404).json({ error: "Not found" });
-    res.json({ message: "Hospital verified", hospital });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
+router.patch(
+  "/:id/verify",
+  authenticate,
+  requireRole("admin"),
+  async (req, res) => {
+    try {
+      const { data: hospital, error } = await supabase
+        .from("hospitals")
+        .update({ is_verified: true })
+        .eq("id", req.params.id)
+        .select()
+        .single();
+      if (error) return res.status(400).json({ error: error.message });
+      res.json({ message: "Hospital verified", hospital });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 module.exports = router;
