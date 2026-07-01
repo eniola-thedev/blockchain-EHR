@@ -111,7 +111,7 @@ app.get("/api/inter-hospital/incoming", authenticate, async (req, res) => {
     let query = supabase
       .from("access_requests")
       .select("*")
-      .eq("home_hospital_id", req.user.hospital_id)
+      .eq("target_hospital_id", req.user.hospital_id)
       .order("created_at", { ascending: false });
     if (status && status !== "all") query = query.eq("status", status);
     const { data: requests, error } = await query;
